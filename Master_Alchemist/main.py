@@ -399,9 +399,9 @@ class SlackRelay:
 		channel_message = f"<@{user_id}> Your *{project_name}* has been reviewed. Please check your DM by <@U0B18V07GQ3> for details."
 		resp = await self.app.client.chat_postMessage(
 			channel=ship_channel,
-			text=channel_message,
-			username=reviewer_name,
-			icon_url=reviewer_avatar,
+			text=channel_message
+			# username=reviewer_name,
+			# icon_url=reviewer_avatar,
 		)
 
 		# Send detailed review to DM
@@ -425,9 +425,9 @@ class SlackRelay:
 		channel_message = f"<@{user_id}> Your *{project_name}* has been reviewed. Please check your DM by <@U0B18V07GQ3> for details."
 		resp = await self.app.client.chat_postMessage(
 			channel=ship_channel,
-			text=channel_message,
-			username=reviewer_name,
-			icon_url=reviewer_avatar,
+			text=channel_message  #,
+			# username=reviewer_name,
+			# icon_url=reviewer_avatar,
 		)
 
 		# Send detailed review to DM
@@ -449,7 +449,7 @@ class SlackRelay:
 				"type": "section",
 				"text": {
 					"type": "mrkdwn",
-					"text": f"Nice Master Cleric <@{reviewer_id}> has been impressed by your project *{project_name}*.",
+					"text": f"Alchinspectors has been impressed by your project *{project_name}*.",
 				},
 			},
 			{
@@ -482,7 +482,7 @@ class SlackRelay:
 
 		resp = await self.app.client.chat_postMessage(
 			channel=channel,
-			text=f"{reviewer_name} reviewed {project_name}",
+			text=f"Alchinspectors reviewed {project_name}",
 			blocks=blocks,
 		)
 
@@ -582,7 +582,7 @@ class SlackRelay:
 				"type": "section",
 				"text": {
 					"type": "mrkdwn",
-					"text": f"Nice Master Cleric <@{reviewer_id}> has reviewed your project *{project_name}*."
+					"text": f"Alchinspectors has reviewed your project *{project_name}*."
 				},
 			},
 			{
@@ -615,7 +615,7 @@ class SlackRelay:
 
 		resp = await self.app.client.chat_postMessage(
 			channel=channel,
-			text=f"{reviewer_name} reviewed {project_name}",
+			text=f"Alchinspectors reviewed {project_name}",
 			blocks=blocks,
 		)
 
@@ -623,13 +623,13 @@ class SlackRelay:
 
 
 async def bot_heartbeat_task(settings: Settings, slack_relay: SlackRelay) -> None:
-	"""Background task that sends a heartbeat message every 30 minutes to the logging channel."""
+	"""Background task that sends a heartbeat message every 24 hrs to the logging channel."""
 	if not settings.logging_channel_id:
 		return
 
 	while True:
 		try:
-			await asyncio.sleep(1800)  # 30 minutes
+			await asyncio.sleep(86400)  # 24 hrs
 			resp = await slack_relay.app.client.chat_postMessage(
 				channel=settings.logging_channel_id,
 				text=":alchemist: Bot is Online!",
