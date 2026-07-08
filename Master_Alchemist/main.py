@@ -5,6 +5,8 @@ import traceback
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
@@ -393,15 +395,113 @@ class SlackRelay:
 		user_info = await self.app.client.users_info(user=reviewer_id)
 		user_profile = user_info.get("user", {})
 		reviewer_name = user_profile.get("profile", {}).get("display_name") or user_profile.get("real_name", "Unknown")
-		reviewer_avatar = user_profile.get("profile", {}).get("image_192") or user_profile.get("profile", {}).get("image_512", "")
+		reviewer_avatar = user_profile.get("profile", {}).get("image_512") or user_profile.get("profile", {}).get("image_original", "")
 
 		# Post to ship channel spoofed as reviewer
-		channel_message = f"<@{user_id}> Your *{project_name}* has been reviewed. Please check your DM by <@U0B18V07GQ3> for details."
+		# channel_message = f"<@{user_id}> Your *{project_name}* has been reviewed. Please check your DM by <@U0B18V07GQ3> for details."
+		blocks = [
+		{
+		"type": "container",
+		"block_id": "bkb_container_icon_subtitle",
+		"title": {
+		"type": "plain_text",
+		"text": f"{project_name}"
+		},
+		"child_blocks": [
+		{
+		"type": "context",
+		"block_id": "context-r",
+		"elements": [
+		{
+		"type": "mrkdwn",
+		"text": f"Submitted By: <@{user_id}>"
+		}
+		]
+		},
+		{
+		"type": "table",
+		"block_id": "section-1",
+		"rows": [
+		[
+		{
+		"type": "rich_text",
+		"elements": [
+		{
+		"type": "rich_text_section",
+		"elements": [
+		{
+		"type": "text",
+		"text": "Status",
+		"style": {
+		"bold": True
+		}
+		}
+		]
+		}
+		]
+		},
+		{
+		"type": "raw_text",
+		"text": "🟢 Approved"
+		}
+		],
+		[
+		{
+		"type": "rich_text",
+		"elements": [
+		{
+		"type": "rich_text_section",
+		"elements": [
+		{
+		"type": "text",
+		"text": "Currency",
+		"style": {
+		"bold": True
+		}
+		}
+		]
+		}
+		]
+		},
+		{
+		"type": "raw_text",
+		"text": f"{currencies}"
+		}
+		]
+		]
+		},
+		{
+		"type": "divider",
+		"block_id": "divider-1"
+		},
+		{
+		"type": "context",
+		"block_id": "context-1",
+		"elements": [
+		{
+		"type": "mrkdwn",
+		"text": f"Reviewed By: <@{reviewer_id}>"
+		}
+		]
+		}
+		]
+		},
+		{
+		"type": "context",
+		"elements": [
+		{
+		"type": "mrkdwn",
+		"text": f"<{project_link}|View Project> · {datetime.now(ZoneInfo("Asia/Kolkata")).strftime('%d-%m-%Y %H:%M:%S %Z')}"
+		}
+		]
+		}
+		]
+
 		resp = await self.app.client.chat_postMessage(
 			channel=ship_channel,
-			text=channel_message
-			# username=reviewer_name,
-			# icon_url=reviewer_avatar,
+			blocks=blocks,
+			username=reviewer_name,
+			icon_url=reviewer_avatar
 		)
 
 		# Send detailed review to DM
@@ -419,15 +519,112 @@ class SlackRelay:
 		user_info = await self.app.client.users_info(user=reviewer_id)
 		user_profile = user_info.get("user", {})
 		reviewer_name = user_profile.get("profile", {}).get("display_name") or user_profile.get("real_name", "Unknown")
-		reviewer_avatar = user_profile.get("profile", {}).get("image_192") or user_profile.get("profile", {}).get("image_512", "")
+		reviewer_avatar = user_profile.get("profile", {}).get("image_original") or user_profile.get("profile", {}).get("image_512", "")
 
 		# Post to ship channel spoofed as reviewer
-		channel_message = f"<@{user_id}> Your *{project_name}* has been reviewed. Please check your DM by <@U0B18V07GQ3> for details."
+		blocks = [
+		{
+		"type": "container",
+		"block_id": "bkb_container_icon_subtitle",
+		"title": {
+		"type": "plain_text",
+		"text": f"{project_name}"
+		},
+		"child_blocks": [
+		{
+		"type": "context",
+		"block_id": "context-r",
+		"elements": [
+		{
+		"type": "mrkdwn",
+		"text": f"Submitted By: <@{user_id}>"
+		}
+		]
+		},
+		{
+		"type": "table",
+		"block_id": "section-1",
+		"rows": [
+		[
+		{
+		"type": "rich_text",
+		"elements": [
+		{
+		"type": "rich_text_section",
+		"elements": [
+		{
+		"type": "text",
+		"text": "Status",
+		"style": {
+		"bold": True
+		}
+		}
+		]
+		}
+		]
+		},
+		{
+		"type": "raw_text",
+		"text": "🔴 Rejected"
+		}
+		],
+		[
+		{
+		"type": "rich_text",
+		"elements": [
+		{
+		"type": "rich_text_section",
+		"elements": [
+		{
+		"type": "text",
+		"text": "Reviewer Notes",
+		"style": {
+		"bold": True
+		}
+		}
+		]
+		}
+		]
+		},
+		{
+		"type": "raw_text",
+		"text": f"{feedback}"
+		}
+		]
+		]
+		},
+		{
+		"type": "divider",
+		"block_id": "divider-1"
+		},
+		{
+		"type": "context",
+		"block_id": "context-1",
+		"elements": [
+		{
+		"type": "mrkdwn",
+		"text": f"Reviewed By: <@{reviewer_id}>"
+		}
+		]
+		}
+		]
+		},
+		{
+		"type": "context",
+		"elements": [
+		{
+		"type": "mrkdwn",
+		"text": f"<{project_link}|View Project> · {datetime.now(ZoneInfo("Asia/Kolkata")).strftime('%d-%m-%Y %H:%M:%S %Z')}"
+		}
+		]
+		}
+		]
+
 		resp = await self.app.client.chat_postMessage(
 			channel=ship_channel,
-			text=channel_message  #,
-			# username=reviewer_name,
-			# icon_url=reviewer_avatar,
+			blocks=blocks,
+			username=reviewer_name,
+			icon_url=reviewer_avatar
 		)
 
 		# Send detailed review to DM
@@ -449,7 +646,7 @@ class SlackRelay:
 				"type": "section",
 				"text": {
 					"type": "mrkdwn",
-					"text": f"Alchinspectors has been impressed by your project *{project_name}*.",
+					"text": f"Alchinspectors has approved by your project *{project_name}*.",
 				},
 			},
 			{
@@ -782,10 +979,39 @@ async def ship_project(
 		)
 
 	# Public channel notification: ping the user and mention the project (bold project name)
-	public_message = f"<@{payload.user_id}> Your *{payload.project_name}* has been submitted for review."
+	#public_message = f"<@{payload.user_id}> Your *{payload.project_name}* has been submitted for review."
+	blocks = [
+	{
+	"type": "card",
+	"title": {
+	"type": "mrkdwn",
+	"text": "New Submisson",
+	"verbatim": False
+	},
+	"subtitle": {
+	"type": "mrkdwn",
+	"text": f"Submitted by <@{payload.user_id}>",
+	"verbatim": False
+	},
+	"body": {
+	"type": "mrkdwn",
+	"text": f"{payload.project_name}",
+	"verbatim": False
+	}
+	},
+	{
+	"type": "context",
+	"elements": [
+	{
+	"type": "mrkdwn",
+	"text": f"<{payload.project_link}|View Project> · {datetime.now(ZoneInfo("Asia/Kolkata")).strftime('%d-%m-%Y %H:%M:%S %Z')}" #03/07/2026 13:09 IST"
+	}
+	]
+	}
+	]
 	public_resp = await slack_relay.app.client.chat_postMessage(
 		channel=ship_channel,
-		text=public_message,
+		blocks=blocks,
 	)
 
 	# Direct message to the submitter
