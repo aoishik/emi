@@ -48,7 +48,7 @@ load_dotenv_if_present()
 
 @dataclass(frozen=True)
 class Settings:
-	app_name: str = os.getenv("APP_NAME", "Master Alchemist")
+	app_name: str = os.getenv("APP_NAME", "Emi")
 	api_host: str = os.getenv("API_HOST", "0.0.0.0")
 	api_port: int = int(os.getenv("API_PORT", "8000"))
 	auth_bearer_token: str = os.getenv("AUTH_BEARER_TOKEN", "")
@@ -646,7 +646,7 @@ class SlackRelay:
 				"type": "section",
 				"text": {
 					"type": "mrkdwn",
-					"text": f"Alchinspectors has approved by your project *{project_name}*.",
+					"text": f"A reviewer has approved by your project *{project_name}*.",
 				},
 			},
 			{
@@ -662,7 +662,7 @@ class SlackRelay:
 			{
 				"type": "context",
 				"elements": [
-					{"type": "mrkdwn", "text": "Keep up the great work and continue to refine your alchemical skills! :alchemize:"},
+					{"type": "mrkdwn", "text": "Keep up the great work and continue to study hard!"},
 				],
 			},
 			{
@@ -679,7 +679,7 @@ class SlackRelay:
 
 		resp = await self.app.client.chat_postMessage(
 			channel=channel,
-			text=f"Alchinspectors reviewed {project_name}",
+			text=f"A reviewer reviewed {project_name}",
 			blocks=blocks,
 		)
 
@@ -694,7 +694,7 @@ class SlackRelay:
 			item_name=payload.item_name,
 			qty=payload.qty,
 			cost=payload.cost,
-			closing_line="Thanking you for participating in Alchemize with us! :alchemize:",
+			closing_line="Thanking you for participating in Jus' Study with us!",
 			extra_lines=None,
 		)
 
@@ -707,7 +707,7 @@ class SlackRelay:
 			item_name=payload.item_name,
 			qty=payload.qty,
 			cost=payload.cost,
-			closing_line="We'll notify you when your order ships. Thank You for your patience! :alchemize:",
+			closing_line="We'll notify you when your order ships. Thank You for your patience!",
 			extra_lines=None,
 		)
 
@@ -752,7 +752,7 @@ class SlackRelay:
 			{
 				"type": "context",
 				"elements": [
-					{"type": "mrkdwn", "text": "Thanking you for participating in Alchemize with us! :alchemize:"},
+					{"type": "mrkdwn", "text": "Thanking you for participating in Jus' Study with us!"},
 				],
 			},
 		]
@@ -779,7 +779,7 @@ class SlackRelay:
 				"type": "section",
 				"text": {
 					"type": "mrkdwn",
-					"text": f"Alchinspectors has reviewed your project *{project_name}*."
+					"text": f"A reviewer has reviewed your project *{project_name}*."
 				},
 			},
 			{
@@ -812,7 +812,7 @@ class SlackRelay:
 
 		resp = await self.app.client.chat_postMessage(
 			channel=channel,
-			text=f"Alchinspectors reviewed {project_name}",
+			text=f"A reviewer has reviewed {project_name}",
 			blocks=blocks,
 		)
 
@@ -829,7 +829,7 @@ async def bot_heartbeat_task(settings: Settings, slack_relay: SlackRelay) -> Non
 			await asyncio.sleep(86400)  # 24 hrs
 			resp = await slack_relay.app.client.chat_postMessage(
 				channel=settings.logging_channel_id,
-				text=":alchemist: Bot is Online!",
+				text="Bot is Online!",
 			)
 			if not resp.get("ok"):
 				print(f"Failed to send heartbeat: {resp}")

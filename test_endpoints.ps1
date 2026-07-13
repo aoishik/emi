@@ -1,5 +1,5 @@
 <#
-Tests every Master Alchemist endpoint.
+Tests every bot endpoint.
 
 Usage (PowerShell):
   .\test_endpoints.ps1 \

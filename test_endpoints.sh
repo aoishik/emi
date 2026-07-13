@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Tests every Master Alchemist endpoint using curl.
+# Tests every bot endpoint using curl.
 # Portable: does not depend on Python/venv, and can be run from any directory.
 #
 # Usage:

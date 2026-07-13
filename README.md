@@ -22,7 +22,7 @@ It provides a small FastAPI server that:
   - `POST /fulfill_reject`
   - `POST /fulfill_fullfilled`
 - **Custom message relay** (`POST /custom`) to a user DM (`U…`) or channel (`C…`/`G…`).
-- Optional **heartbeat logging**: if `LOGGING_CHANNEL_ID` is set, the bot posts `:alchemist: Bot is online!` every 5 minutes.
+- Optional **heartbeat logging**: if `LOGGING_CHANNEL_ID` is set, the bot posts `Bot is online!` every 5 minutes.
 
 ## Authentication
 
@@ -42,7 +42,7 @@ Required for full functionality:
 - `SHIP_CHANNEL_ID`
 
 Optional:
-- `APP_NAME` (default: `Master Alchemist`)
+- `APP_NAME` (default: `Emi`)
 - `API_HOST` (default: `0.0.0.0`)
 - `API_PORT` (default: `8000`)
 - `LOGGING_CHANNEL_ID` (enables heartbeat)
