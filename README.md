@@ -1,6 +1,6 @@
-# Master Alchemist
+# Emi - Jus' Study
 
-Master Alchemist is a Slack bot + HTTP API for the Hack Club YSWS **Alchemize**.
+Emi - Jus' Study is a Slack bot + HTTP API for the Hack Club YSWS **Jus' Study**.
 
 It provides a small FastAPI server that:
 - Receives Slack Events at `POST /slack/events`
@@ -67,7 +67,7 @@ cp .env.sample .env
 3) Start the server:
 
 ```bash
-python Master_Alchemist/main.py
+python emi/main.py
 ```
 
 Server listens on `http://API_HOST:API_PORT` (defaults to `http://0.0.0.0:8000`).
@@ -84,7 +84,7 @@ pip install -r requirements.txt
 copy .env.sample .env
 # edit .env with your real values
 
-py .\Master_Alchemist\main.py
+py .\emi\main.py
 ```
 
 If you don’t want to use `.env`, you can set environment variables directly:
@@ -94,7 +94,7 @@ $env:AUTH_BEARER_TOKEN = "replace-me"
 $env:SLACK_BOT_TOKEN = "xoxb-..."
 $env:SLACK_SIGNING_SECRET = "..."
 $env:SHIP_CHANNEL_ID = "C..."
-py .\Master_Alchemist\main.py
+py .\emi\main.py
 ```
 
 ## Deploy (production)
@@ -108,13 +108,13 @@ Minimal production guidance:
 Typical start command (works anywhere you can run Python):
 
 ```bash
-python Master_Alchemist/main.py
+python emi/main.py
 ```
 
 You can also run via Uvicorn directly:
 
 ```bash
-uvicorn Master_Alchemist.main:app --host 0.0.0.0 --port 8000
+uvicorn emi.main:app --host 0.0.0.0 --port 8000
 ```
 
 ## Run with Docker
