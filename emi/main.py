@@ -74,7 +74,7 @@ class ReviewAcceptPayload(BaseModel):
 	project_link: str = Field(min_length=1)
 	reviewer_id: str = Field(min_length=1, description="Slack user ID of reviewer")
 	feedback: str = Field(min_length=1, max_length=2000)
-	currencies: str = Field(min_length=1, description="Currency reward string e.g. '100 Gold, 50 Silver'")
+	# currencies: str = Field(min_length=1, description="Currency reward string e.g. '100 Gold, 50 Silver'")
 
 
 class ReviewRejectPayload(BaseModel):
@@ -107,6 +107,11 @@ class FulfillFullfilledPayload(BaseModel):
 class CustomMessagePayload(BaseModel):
 	target_id: str = Field(min_length=1, description="Slack user ID or channel ID")
 	message: str = Field(min_length=1, max_length=4000)
+
+class BlockKitPayload(BaseModel):
+	target_id: str = Field(min_length=1, description="Slack user ID or channel ID")
+	title: str = Field(min_length=1, max_length=200)
+	blocks: list[dict] = Field(min_length=1)
 
 
 class SlackDispatchResult(BaseModel):
@@ -357,6 +362,15 @@ class SlackRelay:
 		)
 		return SlackDispatchResult(ok=bool(resp["ok"]), channel=channel, ts=resp.get("ts"))
 
+	async def send_block_kit(self, target_id: str, title: str, blocks: list[dict]) -> SlackDispatchResult:
+		channel = await self._resolve_target_channel(target_id)
+		resp = await self.app.client.chat_postMessage(
+			channel=channel,
+			text=title,
+			blocks=blocks
+		)
+		return SlackDispatchResult(ok=bool(resp["ok"]), channel=channel, ts=resp.get("ts"))
+
 	async def send_dm(self, user_id: str, project_name: str, project_link: str) -> SlackDispatchResult:
 		# Open a DM channel with the user (conversations_open returns channel info)
 		conv = await self.app.client.conversations_open(users=user_id)
@@ -385,7 +399,7 @@ class SlackRelay:
 		return SlackDispatchResult(ok=bool(resp["ok"]), channel=channel, ts=resp.get("ts"))
 
 
-	async def post_review_accept(self, user_id: str, project_name: str, project_link: str, reviewer_id: str, feedback: str, currencies: str) -> dict[str, Any]:
+	async def post_review_accept(self, user_id: str, project_name: str, project_link: str, reviewer_id: str, feedback: str) -> dict[str, Any]:
 		"""Post acceptance review with custom reviewer profile in channel and detailed message in DM."""
 		ship_channel = self.settings.ship_channel_id
 		if not ship_channel:
@@ -454,7 +468,7 @@ class SlackRelay:
 		"elements": [
 		{
 		"type": "text",
-		"text": "Currency",
+		"text": "feedback",
 		"style": {
 		"bold": True
 		}
@@ -465,7 +479,7 @@ class SlackRelay:
 		},
 		{
 		"type": "raw_text",
-		"text": f"{currencies}"
+		"text": f"{feedback}"
 		}
 		]
 		]
@@ -505,7 +519,7 @@ class SlackRelay:
 		)
 
 		# Send detailed review to DM
-		await self.send_review_dm_accept(user_id, project_name, project_link, reviewer_name, reviewer_id, feedback, currencies)
+		await self.send_review_dm_accept(user_id, project_name, project_link, reviewer_name, reviewer_id, feedback)
 
 		return {"ok": bool(resp["ok"]), "channel": ship_channel, "ts": resp.get("ts")}
 
@@ -632,7 +646,7 @@ class SlackRelay:
 
 		return {"ok": bool(resp["ok"]), "channel": ship_channel, "ts": resp.get("ts")}
 
-	async def send_review_dm_accept(self, user_id: str, project_name: str, project_link: str, reviewer_name: str, reviewer_id: str, feedback: str, currencies: str) -> SlackDispatchResult:
+	async def send_review_dm_accept(self, user_id: str, project_name: str, project_link: str, reviewer_name: str, reviewer_id: str, feedback: str) -> SlackDispatchResult:
 		"""Send detailed acceptance review to DM as mrkdwn blocks so it can be edited later."""
 		conv = await self.app.client.conversations_open(users=user_id)
 		channel = conv["channel"]["id"]
@@ -653,7 +667,7 @@ class SlackRelay:
 				"type": "section",
 				"text": {
 					"type": "mrkdwn",
-					"text": f"*Acceptance Feedback:* {feedback}\n\n*You get:* {currencies}",
+					"text": f"*Acceptance Feedback:* {feedback}\n\n*Your project is now under Voting Stage.",
 				},
 			},
 			{
@@ -1108,6 +1122,13 @@ async def custom_message(
 	response = await slack_relay.send_custom_message(payload.target_id, payload.message)
 	return {"ok": response.ok, "channel": response.channel, "ts": response.ts}
 
+@app.post("/blockkit")
+async def block_kit_msg(
+	payload: BlockKitPayload,
+	_: None = Depends(verify_bearer_token),
+) -> dict[str, Any]:
+	response = await slack_relay.send_block_kit(payload.target_id, payload.title, payload.blocks)
+	return {"ok": response.ok, "channel": response.channel, "ts": response.ts}
 
 def main() -> None:
 	uvicorn.run(app, host=settings.api_host, port=settings.api_port, reload=False)
