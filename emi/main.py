@@ -103,7 +103,6 @@ class FulfillFullfilledPayload(BaseModel):
 	fulfilled_by: str = Field(min_length=1)
 	tracking_details: str = Field(min_length=1)
 
-
 class CustomMessagePayload(BaseModel):
 	target_id: str = Field(min_length=1, description="Slack user ID or channel ID")
 	message: str = Field(min_length=1, max_length=4000)
@@ -113,6 +112,12 @@ class BlockKitPayload(BaseModel):
 	title: str = Field(min_length=1, max_length=200)
 	blocks: list[dict] = Field(min_length=1)
 
+class VotingCompletePayload(BaseModel):
+	user_id: str = Field(min_length=1, description="Slack user ID of project submitter")
+	project_name: str = Field(min_length=1)
+	project_link: str = Field(min_length=1)
+	feedback: str | None = Field(default=None, min_length=1, max_length=2000)
+	currencies: str = Field(min_length=1, description="Currency reward string e.g. '100 Gold, 50 Silver'")
 
 class SlackDispatchResult(BaseModel):
 	ok: bool
@@ -232,6 +237,12 @@ def verify_bearer_token(
 
 
 class SlackRelay:
+	# Channels exempt from channel manager check for /jusstudy-ping
+	JUSSTUDY_PING_EXEMPT_CHANNELS = [
+		"C02185NHSFK", #pingus-pongus
+		"C0A6X2K6YTH", #jus-study-dev
+	]
+
 	def __init__(self, settings: Settings) -> None:
 		self.settings = settings
 		self.app = AsyncApp(
@@ -245,6 +256,100 @@ class SlackRelay:
 		@self.app.action(re.compile(".*"))
 		async def _ack_any_action(ack) -> None:
 			await ack()
+
+		@self.app.command("/jusstudy-ping")
+		async def handle_jusstudy_ping(ack, command, client, say) -> None:
+			await ack()
+			await self._process_jusstudy_ping(command, client, say)
+
+		@self.app.event("app_mention")
+		async def handle_message_events(body, logger) -> None:
+			"""Handle message events (logs for now; can be extended later)."""
+			logger.info(f"Message event received: {body.get('event', {}).get('type')}")
+
+	async def _is_channel_manager(self, channel_id: str, user_id: str) -> bool:
+		"""Check if a user is a channel manager for the given channel."""
+		try:
+			info = await self.app.client.conversations_info(channel=channel_id)
+			channel = info.get("channel", {})
+			creator_user_id = channel.get("creator")
+			if user_id == creator_user_id:
+				return True
+			
+			# Check channel members with manager role or use conversations_members for moderators
+			members = await self.app.client.conversations_members(channel=channel_id)
+			member_list = members.get("members", [])
+			
+			# For now, check if user is the channel creator
+			# In a production system, you might check Slack Connect or other RBAC mechanisms
+			return user_id == creator_user_id
+		except Exception:
+			return False
+
+	async def _process_jusstudy_ping(self, command: dict[str, Any], client: Any, say: Any) -> None:
+		"""Process /jusstudy-ping command."""
+		try:
+			# Parse command text: [channel/here] [msg can be multiline]
+			text = command.get("text", "").strip()
+			if not text:
+				await client.chat_postEphemeral(
+					channel=command["channel_id"],
+					user=command["user_id"],
+					text="Usage: `/jusstudy-ping [channel/here] [message]`",
+				)
+				return
+
+			# Split text to get channel and message
+			parts = text.split(None, 1)  # Split on first whitespace
+			channel_spec = parts[0]
+			message = parts[1] if len(parts) > 1 else "(no message)"
+
+			# Resolve channel
+			target_channel = command["channel_id"]
+
+			# Remove < > if channel is formatted as <#C123456> 
+			if channel_spec.lower() == "here":
+				message = f"<!here> {message}"
+			else:
+				message = f"<!channel> {message}"
+
+			# Check if channel is exempt from CM check
+			if target_channel not in self.JUSSTUDY_PING_EXEMPT_CHANNELS:
+				# Check if user is channel manager
+				is_cm = await self._is_channel_manager(target_channel, command["user_id"])
+				if not is_cm:
+					await client.chat_postEphemeral(
+						channel=command["channel_id"],
+						user=command["user_id"],
+						text=":loll:You are not a channel manager. Only channel managers can use `/jusstudy-ping` in this channel.",
+					)
+					return
+
+			blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": message}}]
+			# Fetch user's profile for name and avatar
+			user_info = await self.app.client.users_info(user=command["user_id"])
+			user_profile = user_info.get("user", {})
+			user_name = user_profile.get("profile", {}).get("display_name") or user_profile.get("real_name", "Unknown")
+			user_avatar = user_profile.get("profile", {}).get("image_512") or user_profile.get("profile", {}).get("image_original", "")
+
+			# Send message to target channel
+			await client.chat_postMessage(
+				channel=target_channel,
+				text=message,
+				blocks=blocks,
+				username=user_name,
+				icon_url=user_avatar,
+			)
+		except Exception as exc:
+			await client.chat_postEphemeral(
+				channel=command["channel_id"],
+				user=command["user_id"],
+				text=f"Error processing ping: {str(exc)[:100]}",
+			)
+			await self.log_error(
+				"Error in /jusstudy-ping command",
+				detail=f"Command: {command}\n\nError:\n{traceback.format_exc()}",
+			)
 
 	@staticmethod
 	def _thread_detail_messages(detail: str | None, limit: int = 3500) -> list[str]:
@@ -832,6 +937,220 @@ class SlackRelay:
 
 		return SlackDispatchResult(ok=bool(resp["ok"]), channel=channel, ts=resp.get("ts"))
 
+	async def post_voting_complete(self, user_id: str, project_name: str, project_link: str,vote: str, feedback: str | None, currencies: str) -> dict[str, Any]:
+		"""Post voting complete message with custom reviewer profile in channel and detailed message in DM."""
+		ship_channel = self.settings.ship_channel_id
+		if not ship_channel:
+			raise HTTPException(status_code=400, detail="SHIP_CHANNEL_ID not configured")
+
+		# Fetch reviewer's profile for name and avatar
+		user_info = await self.app.client.users_info(user=user_id)
+		user_profile = user_info.get("user", {})
+		reviewer_name = user_profile.get("profile", {}).get("display_name") or user_profile.get("real_name", "Unknown")
+		reviewer_avatar = user_profile.get("profile", {}).get("image_512") or user_profile.get("profile", {}).get("image_original", "")
+
+		# Post to ship channel
+		blocks = [
+			{
+				"type": "container",
+				"block_id": "bkb_container_voting_complete",
+				"title": {
+					"type": "plain_text",
+					"text": f"{project_name}"
+				},
+				"child_blocks": [
+					{
+						"type": "context",
+						"block_id": "context-submitter",
+						"elements": [
+							{
+								"type": "mrkdwn",
+								"text": f"Submitted By: <@{user_id}>"
+							}
+						]
+					},
+					{
+						"type": "table",
+						"block_id": "section-voting",
+						"rows": [
+							[
+								{
+									"type": "rich_text",
+									"elements": [
+										{
+											"type": "rich_text_section",
+											"elements": [
+												{
+													"type": "text",
+													"text": "Status",
+													"style": {
+														"bold": True
+													}
+												}
+											]
+										}
+									]
+								},
+								{
+									"type": "raw_text",
+									"text": "🎉 Voting Complete"
+								}
+							],
+							[
+								{
+									"type": "rich_text",
+									"elements": [
+										{
+											"type": "rich_text_section",
+											"elements": [
+												{
+													"type": "text",
+													"text": "Reward",
+													"style": {
+														"bold": True
+													}
+												}
+											]
+										}
+									]
+								},
+								{
+									"type": "raw_text",
+									"text": f"{currencies}"
+								}
+							],
+							[
+								{
+									"type": "rich_text",
+									"elements": [
+										{
+											"type": "rich_text_section",
+											"elements": [
+												{
+													"type": "text",
+													"text": "Voting Info",
+													"style": {
+														"bold": True
+													}
+												}
+											]
+										}
+									]
+								},
+								{
+									"type": "raw_text",
+									"text": f"{vote}"
+								}
+							]
+						]
+					},
+					{
+						"type": "divider",
+						"block_id": "divider-voting"
+					},
+					{
+						"type": "context",
+						"block_id": "context-reviewer",
+						"elements": [
+							{
+								"type": "mrkdwn",
+								"text": f"Voting Completed for {project_name} shipped by <@{user_id}>"
+							}
+						]
+					}
+				]
+			},
+			{
+				"type": "context",
+				"elements": [
+					{
+						"type": "mrkdwn",
+						"text": f"<{project_link}|View Project> · {datetime.now(ZoneInfo("Asia/Kolkata")).strftime('%d-%m-%Y %H:%M:%S %Z')}"
+					}
+				]
+			}
+		]
+
+		resp = await self.app.client.chat_postMessage(
+			channel=ship_channel,
+			blocks=blocks,
+			username=reviewer_name,
+			icon_url=reviewer_avatar
+		)
+
+		# Send detailed voting complete notification to DM
+		await self.send_voting_complete_dm(user_id, project_name, project_link, vote, feedback, currencies)
+
+		return {"ok": bool(resp["ok"]), "channel": ship_channel, "ts": resp.get("ts")}
+
+	async def send_voting_complete_dm(self, user_id: str, project_name: str, project_link: str, vote: str, feedback: str | None, currencies: str) -> SlackDispatchResult:
+		"""Send detailed voting complete notification to DM."""
+		conv = await self.app.client.conversations_open(users=user_id)
+		channel = conv["channel"]["id"]
+
+		feedback_text = feedback if feedback else "Thank you for your participation!"
+		blocks = [
+			{
+				"type": "header",
+				"text": {"type": "plain_text", "text": ":trophy: Voting Complete! Congratulations!"},
+			},
+			{
+				"type": "section",
+				"text": {
+					"type": "mrkdwn",
+					"text": f"Your project *{project_name}* has completed the voting stage!",
+				},
+			},
+			{
+				"type": "section",
+				"text": {
+					"type": "mrkdwn",
+					"text": f"*Reward Earned:* {currencies}",
+				},
+			},
+			{
+				"type": "section",
+				"text": {
+					"type": "mrkdwn",
+					"text": f"*Voting Info:* {vote}",
+				},
+			},
+			{
+				"type": "section",
+				"text": {
+					"type": "mrkdwn",
+					"text": f"*{'Feedback:' if feedback_text else 'Go Study now! Stop looking at Slack'}* {feedback_text if feedback_text else 'No feedback provided.'}",
+				},
+			},
+			{
+				"type": "divider",
+			},
+			{
+				"type": "context",
+				"elements": [
+					{"type": "mrkdwn", "text": "Great work on completing the study! Keep shipping amazing projects! :star:"},
+				],
+			},
+			{
+				"type": "actions",
+				"elements": [
+					{
+						"type": "button",
+						"text": {"type": "plain_text", "text": "View Project"},
+						"url": project_link,
+					}
+				],
+			},
+		]
+
+		resp = await self.app.client.chat_postMessage(
+			channel=channel,
+			text=f"Voting complete for {project_name}",
+			blocks=blocks,
+		)
+
+		return SlackDispatchResult(ok=bool(resp["ok"]), channel=channel, ts=resp.get("ts"))
+
 
 async def bot_heartbeat_task(settings: Settings, slack_relay: SlackRelay) -> None:
 	"""Background task that sends a heartbeat message every 24 hrs to the logging channel."""
@@ -1129,6 +1448,28 @@ async def block_kit_msg(
 ) -> dict[str, Any]:
 	response = await slack_relay.send_block_kit(payload.target_id, payload.title, payload.blocks)
 	return {"ok": response.ok, "channel": response.channel, "ts": response.ts}
+
+
+@app.post("/voting-complete")
+async def voting_complete(
+	payload: VotingCompletePayload,
+	_: None = Depends(verify_bearer_token),
+) -> dict[str, Any]:
+	"""Handle voting completion for a project.
+
+	Posts a voting complete message to the ship channel with custom reviewer profile (name/avatar)
+	and sends DM notification to the project submitter with reward information.
+	"""
+	voting_response = await slack_relay.post_voting_complete(
+		user_id=payload.user_id,
+		project_name=payload.project_name,
+		project_link=payload.project_link,
+		vote=payload.vote,
+		feedback=payload.feedback,
+		currencies=payload.currencies,
+	)
+	return {"ok": voting_response["ok"], "channel": voting_response["channel"], "ts": voting_response.get("ts")}
+
 
 def main() -> None:
 	uvicorn.run(app, host=settings.api_host, port=settings.api_port, reload=False)
