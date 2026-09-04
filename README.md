@@ -31,6 +31,11 @@ All non-Slack endpoints (everything except `GET /healthz` and `POST /slack/event
 - Header: `Authorization: Bearer <token>`
 - The server compares `<token>` to the configured `AUTH_BEARER_TOKEN`.
 
+## Security notes
+
+- Treat `AUTH_BEARER_TOKEN`, `SLACK_BOT_TOKEN`, and `SLACK_SIGNING_SECRET` as secrets.
+- Anyone with the bearer token can post messages via this API.
+
 ## Configuration (Environment Variables)
 
 The server prefers real environment variables. If a key is missing, it will try to load it from a local `.env` file (see `.env.sample`).
@@ -48,7 +53,6 @@ Optional:
 - `LOGGING_CHANNEL_ID` (enables heartbeat)
 
 ## Run locally (Linux/macOS)
-
 1) Create a virtualenv and install dependencies:
 
 ```bash
@@ -67,7 +71,7 @@ cp .env.sample .env
 3) Start the server:
 
 ```bash
-python emi/main.py
+python src/emi
 ```
 
 Server listens on `http://API_HOST:API_PORT` (defaults to `http://0.0.0.0:8000`).
@@ -84,7 +88,7 @@ pip install -r requirements.txt
 copy .env.sample .env
 # edit .env with your real values
 
-py .\emi\main.py
+py .\src\emi
 ```
 
 If you don’t want to use `.env`, you can set environment variables directly:
@@ -94,7 +98,7 @@ $env:AUTH_BEARER_TOKEN = "replace-me"
 $env:SLACK_BOT_TOKEN = "xoxb-..."
 $env:SLACK_SIGNING_SECRET = "..."
 $env:SHIP_CHANNEL_ID = "C..."
-py .\emi\main.py
+py .\src\emi
 ```
 
 ## Deploy (production)
@@ -108,13 +112,13 @@ Minimal production guidance:
 Typical start command (works anywhere you can run Python):
 
 ```bash
-python emi/main.py
+python src/emi
 ```
 
 You can also run via Uvicorn directly:
 
 ```bash
-uvicorn emi.main:app --host 0.0.0.0 --port 8000
+uvicorn src.emi.__main__:app --host 0.0.0.0 --port 8000
 ```
 
 ## Run with Docker
@@ -122,7 +126,7 @@ uvicorn emi.main:app --host 0.0.0.0 --port 8000
 Build the image:
 
 ```bash
-docker build -t m_alc .
+docker build -t emi_slack_bot .
 ```
 
 Run the container:
@@ -134,7 +138,7 @@ docker run -d -p 8000:8000 --restart always --name my-bot-service \
   -e SLACK_SIGNING_SECRET="$SLACK_SIGNING_SECRET" \
   -e SHIP_CHANNEL_ID="$SHIP_CHANNEL_ID" \
   -e LOGGING_CHANNEL_ID="$LOGGING_CHANNEL_ID" \
-  m_alc
+  emi_slack_bot
 ```
 
 View logs:
@@ -285,8 +289,3 @@ To include Slack Events testing:
 ```bash
 ./test_endpoints.sh --base-url http://127.0.0.1:8000 --auth-token "$AUTH" --test-slack-events --slack-signing-secret "$SLACK_SIGNING_SECRET" U_REVIEWER U_USER1
 ```
-
-## Security notes
-
-- Treat `AUTH_BEARER_TOKEN`, `SLACK_BOT_TOKEN`, and `SLACK_SIGNING_SECRET` as secrets.
-- Anyone with the bearer token can post messages via this API.
